@@ -13,7 +13,7 @@ import numpy as np
 app = Flask(__name__)
 app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:BH3k9Ibr9dd4FFhE@localhost:3306/dna'
 db = SQLAlchemy(app)
-api = Api(app) 
+api = Api(app)
 
 class Dna(db.Model):
     __tablename__ = "dna"
