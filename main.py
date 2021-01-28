@@ -1,27 +1,54 @@
 from flask import Flask, request
 from flask_restful import Resource, Api, abort
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, func
 from json import dumps
 from flask.json import jsonify
+from flask_sqlalchemy import SQLAlchemy
+from marshmallow_sqlalchemy import ModelSchema
+from marshmallow import fields
 import re
 import numpy as np
 
-db_connect = create_engine('sqlite:///D:/Users/Valentin/Documents/GitHub/repositories/challenge_mutantes/mutants.db')
+
 app = Flask(__name__)
-api = Api(app)
+app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:BH3k9Ibr9dd4FFhE@localhost:3306/dna'
+db = SQLAlchemy(app)
+api = Api(app) 
+
+class Dna(db.Model):
+    __tablename__ = "dna"
+    id = db.Column(db.Integer, primary_key=True)
+    dna_string = db.Column(db.String(2000))
+    result = db.Column(db.Boolean)
+
+    def create(self):
+      db.session.add(self)
+      db.session.commit()
+      return self
+    def __init__(self,dna_string,result):
+        self.dna_string = dna_string
+        self.result = result
+    def __repr__(self):
+        return '' % self.id
+db.create_all()
+
+class DnaSchema(ModelSchema):
+    class Meta(ModelSchema.Meta):
+        model = Dna
+        sqla_session = db.session
+    id = fields.Number(dump_only=True)
+    dna_string = fields.String(required=True)
+    result = fields.Boolean(required=True)
 
 class Mutant(Resource):
     def post(self):
-        # conn = db_connect.connect() # connect to database
-        # query = conn.execute("select * from employees") # This line performs query and returns json result
-        # return {'employees': [i[0] for i in query.cursor.fetchall()]} # Fetches first column that is Employee ID
-        
+
         def split(word): 
             return [char for char in word]
 
         def isMutant(dna):
             total_matchs = horizontal_matchs(dna) + vertical_matchs(dna) + diagonal_matchs(dna)
-            if total_matchs >= 3:
+            if total_matchs > 1:
                 return True
             else:
                 return False
@@ -64,45 +91,28 @@ class Mutant(Resource):
                     matchs += 1
             return matchs
         
-        # dna =  ["ATGCGAA",
-        #         "CAGTGCA",
-        #         "TTATGTA",
-        #         "AGAAGGA",
-        #         "CCCCTAT",
-        #         "TCACTGT",
-        #         "TTTTTGT"]
         args = request.args
-        print (args) # For debugging
-        dna = args['dna'].strip('][').replace('"', '').split(',')
-        print(dna)
-        cur = db_connect.connect()
-        is_mutant = isMutant(dna)
+        dna_strings = args['dna'].strip('][').replace('"', '').split(',')
+        is_mutant = isMutant(dna_strings)
+        dna_schema = DnaSchema()
+        dna = dna_schema.load({"dna_string": args['dna'], "result": is_mutant})
+        result = dna_schema.dump(dna.create())
         if is_mutant == True:
-            sql =  "INSERT INTO dna(dna_string,result) VALUES('" + args['dna'] + "','"+ str(is_mutant) +"')" 
-            cur.execute(sql)
-            return jsonify(dict(data=[True,"Is a mutant!"]))
+            return jsonify({"data": result})
         else:
-            abort(403, error_message='Is not a mutant!')
+            abort(403, error_message=result)
 
 
-class Tracks(Resource):
+class Stats(Resource):
     def get(self):
-        conn = db_connect.connect()
-        query = conn.execute("select trackid, name, composer, unitprice from tracks;")
-        result = {'data': [dict(zip(tuple (query.keys()) ,i)) for i in query.cursor]}
-        return jsonify(result)
-
-class Employees_Name(Resource):
-    def get(self, employee_id):
-        conn = db_connect.connect()
-        query = conn.execute("select * from employees where EmployeeId =%d "  %int(employee_id))
-        result = {'data': [dict(zip(tuple (query.keys()) ,i)) for i in query.cursor]}
-        return jsonify(result)
+        mutant_count = db.session.query(Dna).filter(Dna.result == 1).count() #db.session.execute("SELECT count(*) from dna.dna d where result = 1").scalar() #
+        human_count = db.session.query(Dna).filter(Dna.result == 0).count()
+        ratio = round(mutant_count/human_count, 2)
+        return jsonify({"count_mutant_dna":mutant_count, "count_human_dna":human_count, "ratio":ratio})
         
 
 api.add_resource(Mutant, '/mutant') # Route_1
-api.add_resource(Tracks, '/tracks') # Route_2
-api.add_resource(Employees_Name, '/employees/<employee_id>') # Route_3
+api.add_resource(Stats, '/stats') # Route_2
 
 
 if __name__ == '__main__':
