@@ -12,8 +12,8 @@ _Magneto quiere reclutar la mayor cantidad de mutantes para poder luchar contra 
 
 ### Pre-requisitos 📋 
 
-Python 3
-PIP  
+ - Python 3
+ - pip
 
 ### Instalación 
 
